@@ -218,10 +218,7 @@ export function createApp({
   app.get("/api/recipes/search", async (req, res) => {
     if (typeof req.query.q !== "string" || req.query.q.length > 100)
       throw httpError(400, "Search must be at most 100 characters.");
-    const data = await recipes.request(
-      `search.php?s=${encodeURIComponent(req.query.q.trim())}`,
-    );
-    res.json({ meals: (data.meals || []).map(normalizeMeal) });
+    res.json({ meals: await recipes.search(req.query.q) });
   });
   app.get("/api/recipes/filter", async (req, res) => {
     const { category, ingredient } = req.query;

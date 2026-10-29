@@ -60,5 +60,43 @@ export function recipeService(fetcher = fetch) {
     if (!data.meals?.[0]) throw httpError(404, "Recipe not found.");
     return normalizeMeal(data.meals[0]);
   }
-  return { request, lookup };
+  async function search(term) {
+    const query = term.trim();
+    // Start name search and category discovery together; category filtering only
+    // runs for an exact category match. All requests reuse the existing cache.
+    const [names, category] = await Promise.all([
+      request(`search.php?s=${encodeURIComponent(query)}`).then(
+        (data) => ({ data }),
+        (error) => ({ error }),
+      ),
+      query
+        ? request("categories.php")
+            .then((data) => {
+              const match = (data.categories || []).find(
+                (c) =>
+                  c.strCategory.trim().toLowerCase() === query.toLowerCase(),
+              );
+              return match
+                ? request(
+                    `filter.php?c=${encodeURIComponent(match.strCategory)}`,
+                  )
+                : null;
+            })
+            .catch(() => null)
+        : null,
+    ]);
+    // Preserve usable results if either source is unavailable. With no usable
+    // source, retain the service's existing safe upstream error response.
+    if (names.error && category === null) throw names.error;
+    const seen = new Set();
+    return [...(names.data?.meals || []), ...(category?.meals || [])]
+      .map(normalizeMeal)
+      .filter((meal) => {
+        const id = String(meal.id);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+  }
+  return { request, lookup, search };
 }

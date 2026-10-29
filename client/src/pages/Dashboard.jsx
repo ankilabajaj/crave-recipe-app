@@ -109,14 +109,14 @@ export default function Dashboard() {
         >
           <Search aria-hidden="true" />
           <label className="sr-only" htmlFor="recipe-query">
-            Search recipes by name
+            Search recipes by name or category
           </label>
           <input
             id="recipe-query"
             value={query}
             maxLength={100}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="What are you craving? Try chicken, pasta, curry…"
+            placeholder="Search a recipe or category, e.g. pasta"
           />
           <button className="button small">
             Search <ArrowUpRight size={17} />

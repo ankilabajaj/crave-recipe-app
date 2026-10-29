@@ -133,7 +133,7 @@ test("dashboard searches, filters, empty state and details navigation", async ()
   const user = userEvent.setup();
   start("/app");
   await screen.findByRole("heading", { name: "Teriyaki Chicken" });
-  await user.type(screen.getByLabelText("Search recipes by name"), "nothing");
+  await user.type(screen.getByLabelText("Search recipes by name or category"), "nothing");
   await user.click(screen.getByRole("button", { name: "Search" }));
   expect(
     await screen.findByRole("heading", {
