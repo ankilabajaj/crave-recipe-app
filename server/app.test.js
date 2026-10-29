@@ -312,3 +312,207 @@ test("successful API responses are cached; random recipes are not", async () => 
   await service.request("random.php");
   assert.equal(count, 3);
 });
+
+test("unified search merges category matches, deduplicates IDs and preserves full name results", async () => {
+  const calls = [];
+  const summary = { idMeal: "52772", strMeal: "Summary chicken" };
+  const extra = { idMeal: "52800", strMeal: "Category-only chicken" };
+  const service = recipeService(async (url) => {
+    const endpoint =
+      new URL(url).pathname.split("/").at(-1) + new URL(url).search;
+    calls.push(endpoint);
+    return {
+      ok: true,
+      json: async () =>
+        endpoint === "categories.php"
+          ? {
+              categories: [
+                { strCategory: "Chicken" },
+                { strCategory: "Pasta" },
+              ],
+            }
+          : endpoint.startsWith("filter.php")
+            ? { meals: [summary, extra, extra] }
+            : {
+                meals: [
+                  raw,
+                  raw,
+                  { idMeal: "52900", strMeal: "Name-only chicken" },
+                ],
+              },
+    };
+  });
+  for (const query of ["chicken", "CHICKEN", " chicken "]) {
+    const meals = await service.search(query);
+    assert.deepEqual(
+      meals.map((m) => m.id),
+      ["52772", "52900", "52800"],
+    );
+    assert.equal(meals[0].name, raw.strMeal);
+    assert.equal(meals[0].ingredients.length, 2);
+  }
+  assert.equal(calls.filter((c) => c === "categories.php").length, 1);
+  assert.equal(calls.filter((c) => c === "filter.php?c=Chicken").length, 1);
+  assert.ok(!calls.some((c) => c.startsWith("lookup.php")));
+});
+
+test("unified search handles unmatched terms, empty results and partial upstream failures", async (t) => {
+  const scenarios = [
+    {
+      name: "unmatched alfredo uses names only",
+      q: "alfredo",
+      expected: ["52772"],
+      filters: 0,
+    },
+    {
+      name: "blank discovery avoids category lookup",
+      q: "  ",
+      expected: ["52772"],
+      filters: 0,
+      categoryCalls: 0,
+    },
+    {
+      name: "category lookup fails but names succeed",
+      fail: "categories.php",
+      expected: ["52772"],
+      filters: 0,
+    },
+    {
+      name: "category filter fails but names succeed",
+      fail: "filter.php",
+      expected: ["52772"],
+      filters: 1,
+    },
+    {
+      name: "name search fails but category succeeds",
+      fail: "search.php",
+      expected: ["52800"],
+      filters: 1,
+    },
+    {
+      name: "no name results still returns category matches",
+      emptyNames: true,
+      expected: ["52800"],
+      filters: 1,
+    },
+    {
+      name: "both sources empty returns empty results",
+      emptyNames: true,
+      emptyCategory: true,
+      expected: [],
+      filters: 1,
+    },
+    {
+      name: "unmatched query and name failure retains 502",
+      q: "alfredo",
+      fail: "search.php",
+      error: true,
+      filters: 0,
+    },
+    {
+      name: "both upstream sources fail retains 502",
+      fail: "all",
+      error: true,
+      filters: 0,
+    },
+  ];
+  for (const scenario of scenarios)
+    await t.test(scenario.name, async () => {
+      const calls = [];
+      const service = recipeService(async (url) => {
+        const u = new URL(url),
+          endpoint = u.pathname.split("/").at(-1);
+        calls.push(endpoint);
+        if (scenario.fail === "all" || scenario.fail === endpoint)
+          throw Error("upstream unavailable");
+        return {
+          ok: true,
+          json: async () =>
+            endpoint === "categories.php"
+              ? { categories: [{ strCategory: "Pasta" }] }
+              : endpoint === "filter.php"
+                ? {
+                    meals: scenario.emptyCategory
+                      ? null
+                      : [{ idMeal: "52800", strMeal: "Pasta category dish" }],
+                  }
+                : { meals: scenario.emptyNames ? null : [raw] },
+        };
+      });
+      if (scenario.error)
+        await assert.rejects(service.search(scenario.q ?? "pasta"), {
+          status: 502,
+        });
+      else
+        assert.deepEqual(
+          (await service.search(scenario.q ?? "pasta")).map((m) => m.id),
+          scenario.expected,
+        );
+      assert.equal(
+        calls.filter((c) => c === "filter.php").length,
+        scenario.filters,
+      );
+      assert.equal(
+        calls.filter((c) => c === "categories.php").length,
+        scenario.categoryCalls ?? 1,
+      );
+    });
+});
+
+test("authenticated search route keeps response shape and existing filters stay independent", async () => {
+  const db = openDatabase(":memory:");
+  const calls = [];
+  const fixture = async (url) => {
+    const u = new URL(url);
+    calls.push(u.pathname.split("/").at(-1) + u.search);
+    return {
+      ok: true,
+      json: async () =>
+        u.pathname.endsWith("categories.php")
+          ? { categories: [{ strCategory: "Pasta" }] }
+          : u.pathname.endsWith("search.php")
+            ? { meals: [raw] }
+            : { meals: [{ idMeal: "52800", strMeal: "Category recipe" }] },
+    };
+  };
+  try {
+    const app = createApp({ db, fetcher: fixture });
+    assert.equal(
+      (await request(app).get("/api/recipes/search?q=pasta")).status,
+      401,
+    );
+    assert.equal(calls.length, 0);
+    const agent = request.agent(app);
+    await register(agent);
+    const response = await agent
+      .get("/api/recipes/search")
+      .query({ q: " PASTA " });
+    assert.equal(response.status, 200);
+    assert.deepEqual(Object.keys(response.body), ["meals"]);
+    assert.deepEqual(
+      response.body.meals.map((m) => m.id),
+      ["52772", "52800"],
+    );
+    calls.length = 0;
+    const category = await agent.get("/api/recipes/filter?category=Chicken");
+    assert.equal(category.status, 200);
+    assert.deepEqual(
+      category.body.meals.map((m) => m.id),
+      ["52800"],
+    );
+    assert.deepEqual(calls, ["filter.php?c=Chicken"]);
+    calls.length = 0;
+    assert.equal(
+      (await agent.get("/api/recipes/filter?ingredient=chicken%20breast"))
+        .status,
+      200,
+    );
+    assert.deepEqual(calls, ["filter.php?i=chicken_breast"]);
+    assert.equal(
+      (await agent.get("/api/recipes/search?q=" + "x".repeat(101))).status,
+      400,
+    );
+  } finally {
+    db.close();
+  }
+});

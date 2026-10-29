@@ -44,7 +44,7 @@ test("six pages, persistent personal data, responsive layout and logout", async 
   await expect(
     page.getByRole("heading", { name: "Teriyaki Chicken" }),
   ).toBeVisible();
-  await page.getByLabel("Search recipes by name").fill("nothing");
+  await page.getByLabel("Search recipes by name or category").fill("nothing");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "No recipes on this menu yet." }),
