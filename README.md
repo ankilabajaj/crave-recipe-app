@@ -91,15 +91,6 @@ Keyboard navigation, skip link, native modal focus handling, labelled inputs, st
 
 Place actual screenshots in `docs/screenshots/` after a live-data review. Pending: landing (desktop/mobile), signup/login, search and filters, recipe detail, saved cookbook, weekly planner and shopping list at 375/768/1440 px. No screenshot placeholders are presented as evidence of completed captures.
 
-## Team review and contribution template
-
-This is a **proposed** division, not verified individual authorship. Implementation includes AI assistance; students should review, understand, modify, test and present their actual work.
-
-| Member          | Proposed module                                               | Actual review/modifications | Tests personally run | Presentation responsibility | Commit/reference |
-| --------------- | ------------------------------------------------------------- | --------------------------- | -------------------- | --------------------------- | ---------------- |
-| Member 1 (name) | Discovery, filters, details, API, surprise                    | To record                   | To record            | To record                   | To record        |
-| Member 2 (name) | Auth, cookbook, planner, SQLite, shopping                     | To record                   | To record            | To record                   | To record        |
-| Shared          | Landing, design, responsiveness, accessibility, documentation | To record                   | To record            | To record                   | To record        |
 
 ## Project documentation
 
