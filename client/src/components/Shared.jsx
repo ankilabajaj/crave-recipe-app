@@ -13,8 +13,7 @@ import { useCookbook } from "../context/Cookbook";
 export function Logo() {
   return (
     <Link to="/" className="logo" aria-label="Crave home">
-      <ChefHat aria-hidden="true" size={29} />
-      crave<span aria-hidden="true">✳</span>
+      crave
     </Link>
   );
 }
