@@ -80,7 +80,6 @@ export default function Dashboard() {
           <p>Follow a craving. Find a favorite. Make it yours.</p>
         </div>
         <div className="banner-note">
-          <span aria-hidden="true">✳</span>
           <p>
             A little inspiration
             <br />
